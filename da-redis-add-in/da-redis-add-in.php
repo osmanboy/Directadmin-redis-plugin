@@ -3,7 +3,7 @@
 Plugin Name: DA Redis add-in
 Description: Simple Redis setup for DirectAdmin, this plug-in installs Redis Object Cache incase it's needed, and configures all settings needed.
 Author: Ericosman
-Version: 0.3 BETA
+Version: 0.3.1 BETA
  */
 
 if (!defined('ABSPATH')) exit;
@@ -30,13 +30,20 @@ function da_redis_get_user() {
  */
 function da_redis_socket_path() {
 
-    // Prefer wp-config
     if (defined('WP_REDIS_PATH') && WP_REDIS_PATH) {
         return WP_REDIS_PATH;
     }
 
-    $user = da_redis_get_user();
-    return $user ? "/home/{$user}/.redis/redis.sock" : null;
+    $home = getenv('HOME');
+    if ($home && is_dir($home)) {
+        return rtrim($home, '/') . '/.redis/redis.sock';
+    }
+
+    if (!empty($_SERVER['HOME']) && is_dir($_SERVER['HOME'])) {
+        return rtrim($_SERVER['HOME'], '/') . '/.redis/redis.sock';
+    }
+
+    return null;
 }
 
 /*
