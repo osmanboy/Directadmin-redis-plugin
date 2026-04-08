@@ -3,13 +3,13 @@
 Plugin Name: DA Redis add-in
 Description: Simple Redis setup for DirectAdmin, this plug-in installs Redis Object Cache incase it's needed, and configures all settings needed.
 Author: Ericosman
-Version: 0.2 BETA
+Version: 0.3 BETA
  */
 
 if (!defined('ABSPATH')) exit;
 
 /*
- * Get DirectAdmin user
+ * Detect DirectAdmin user
  */
 function da_redis_get_user() {
 
@@ -25,7 +25,16 @@ function da_redis_get_user() {
     return null;
 }
 
+/*
+ * Get Redis socket path
+ */
 function da_redis_socket_path() {
+
+    // Prefer wp-config
+    if (defined('WP_REDIS_PATH') && WP_REDIS_PATH) {
+        return WP_REDIS_PATH;
+    }
+
     $user = da_redis_get_user();
     return $user ? "/home/{$user}/.redis/redis.sock" : null;
 }
@@ -46,34 +55,46 @@ function da_redis_object_cache_enabled() {
     return file_exists(WP_CONTENT_DIR . '/object-cache.php');
 }
 
-function da_redis_socket_exists() {
-    $socket = da_redis_socket_path();
-    return $socket && file_exists($socket);
-}
-
 function da_redis_can_connect() {
-    if (!da_redis_php_loaded()) return false;
 
-    $socket = da_redis_socket_path();
-    if (!$socket || !file_exists($socket)) return false;
+    if (!da_redis_php_loaded()) return false;
 
     try {
         $r = new Redis();
-        return @$r->connect($socket);
+
+        // Try socket first
+        $socket = da_redis_socket_path();
+        if ($socket) {
+            if (@$r->connect($socket)) {
+                return true;
+            }
+        }
+
+        // Fallback TCP
+        if (@$r->connect('127.0.0.1', 6379)) {
+            return true;
+        }
+
     } catch (Exception $e) {
         return false;
     }
+
+    return false;
 }
 
 /*
- * Runtime config
+ * Runtime Redis config
  */
 add_filter('redis_cache_parameters', function ($params) {
+
     $socket = da_redis_socket_path();
 
     if ($socket) {
         $params['scheme'] = 'unix';
         $params['path']   = $socket;
+    } else {
+        $params['host'] = '127.0.0.1';
+        $params['port'] = 6379;
     }
 
     return $params;
@@ -161,9 +182,9 @@ function da_redis_fix() {
 }
 
 /*
- * UI helpers
+ * UI helper
  */
-function da_badge($ok, $yes = 'OK', $no = 'Fout') {
+function da_badge($ok, $yes = 'OK', $no = 'Error') {
     $color = $ok ? '#46b450' : '#dc3232';
     $text  = $ok ? $yes : $no;
 
@@ -181,11 +202,16 @@ function da_redis_user_notice() {
 
     if (!da_redis_plugin_active()) return;
 
-    $user = da_redis_get_user();
+    if (!da_redis_php_loaded()) {
+        echo '<div class="notice notice-error"><p>';
+        echo '<strong>DA Redis add-in:</strong> PHP Redis extension is not installed. Redis will not work.';
+        echo '</p></div>';
+        return;
+    }
 
-    if (!$user) {
+    if (!da_redis_get_user() && !defined('WP_REDIS_PATH')) {
         echo '<div class="notice notice-warning"><p>';
-        echo '<strong>DA Redis add-in:</strong> User detection failed. Redis socket not configured.';
+        echo '<strong>DA Redis add-in:</strong> User detection failed and no Redis path defined in wp-config.php.';
         echo '</p></div>';
     }
 }
@@ -206,27 +232,31 @@ add_action('admin_menu', function () {
 
 function da_redis_page() {
 
-    if (isset($_POST['install'])) {
-        da_redis_install_plugin();
-        da_redis_enable_cache();
-    }
+    if (isset($_POST['da_action']) && check_admin_referer('da_redis_nonce_action')) {
 
-    if (isset($_POST['fix'])) {
-        da_redis_fix();
-    }
+        if ($_POST['da_action'] === 'install') {
+            da_redis_install_plugin();
+            da_redis_enable_cache();
+        }
 
-    if (isset($_POST['flush'])) {
-        if (function_exists('wp_cache_flush')) {
-            wp_cache_flush();
+        if ($_POST['da_action'] === 'fix') {
+            da_redis_fix();
+        }
+
+        if ($_POST['da_action'] === 'flush') {
+            if (function_exists('wp_cache_flush')) {
+                wp_cache_flush();
+            }
         }
     }
 
-    $user   = da_redis_get_user();
-    $socket = da_redis_socket_path();
-
     echo '<div class="wrap">';
     echo '<h1>DA Redis add-in</h1>';
-    echo '<p style="color:#666;">DirectAdmin Redis intergration & status</p>';
+    echo '<p style="color:#666;">DirectAdmin Redis integration & status</p>';
+
+    if (defined('WP_REDIS_PATH')) {
+        echo '<p style="color:#666;">Using Redis configuration from wp-config.php</p>';
+    }
 
     echo '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px;max-width:900px;">';
 
@@ -234,7 +264,6 @@ function da_redis_page() {
         'PHP Redis extension' => da_badge(da_redis_php_loaded(), 'Loaded', 'Missing'),
         'Plugin' => da_badge(da_redis_plugin_active(), 'Active', 'Inactive'),
         'Object cache' => da_badge(da_redis_object_cache_enabled(), 'Enabled', 'Disabled'),
-        'Socket' => da_badge(da_redis_socket_exists(), 'Found', 'Missing'),
         'Connection' => da_badge(da_redis_can_connect(), 'OK', 'Failed'),
     ];
 
@@ -247,31 +276,26 @@ function da_redis_page() {
 
     echo '</div>';
 
-    echo '<br>';
-
-    echo '<table class="widefat" style="max-width:900px">';
-    echo '<tr><td style="width:200px;"><strong>User</strong></td><td>' . esc_html($user ?: 'Not detected') . '</td></tr>';
-    echo '<tr><td><strong>Socket path</strong></td><td><code>' . esc_html($socket ?: 'N/A') . '</code></td></tr>';
-    echo '</table>';
-
-    echo '<br><form method="post" style="max-width:900px;">';
+    echo '<br><form method="post">';
+    wp_nonce_field('da_redis_nonce_action');
 
     if (!da_redis_plugin_active()) {
-        submit_button('Install Redis plugin', 'primary', 'install');
+        echo '<button class="button button-primary" name="da_action" value="install">Install Redis plugin</button> ';
     }
 
-    submit_button('Fix Redis', 'secondary', 'fix');
-    submit_button('Flush cache', 'secondary', 'flush');
+    echo '<button class="button" name="da_action" value="fix">Fix Redis</button> ';
+    echo '<button class="button" name="da_action" value="flush">Flush cache</button>';
 
     echo '</form>';
 
-	echo '<p style="margin-top:40px;color:#888;font-size:12px;">
-	<strong>DA Redis add-in</strong> Powered by — 
-	<a href="' . esc_url('https://github.com/osmanboy/Directadmin-redis-plugin/') . '" target="_blank" rel="noopener noreferrer" style="color:#666;text-decoration:none;">GitHub</a> 
-	| 
-	<a href="' . esc_url('https://forum.directadmin.com/members/ericosman.57345/') . '" target="_blank" rel="noopener noreferrer" style="color:#666;text-decoration:none;">Ericosman DirectAdmin Forum</a>
-	<br>© ericosman
-	</p>';
+    echo '<p style="margin-top:40px;color:#888;font-size:12px;">
+    <strong>DA Redis add-in</strong> Powered by  — 
+    <a href="' . esc_url('https://github.com/osmanboy/Directadmin-redis-plugin/') . '" target="_blank" rel="noopener noreferrer" style="color:#666;text-decoration:none;">GitHub</a> 
+    | 
+    <a href="' . esc_url('https://forum.directadmin.com/members/ericosman.57345/') . '" target="_blank" rel="noopener noreferrer" style="color:#666;text-decoration:none;">DirectAdmin Forum</a>
+    <br>© ericosman
+    </p>';
+
     echo '</div>';
 }
 
