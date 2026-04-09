@@ -6,6 +6,18 @@ Author: Ericosman
 Version: 0.5
  */
 
+require_once __DIR__ . '/plugin-update-checker/plugin-update-checker.php';
+
+use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+
+$updateChecker = PucFactory::buildUpdateChecker(
+    'https://github.com/osmanboy/Directadmin-redis-plugin/',
+    __FILE__,
+    'da-redis-connector'
+);
+
+$updateChecker->setBranch('main');
+
 if (!defined('ABSPATH')) exit;
 
 /*
