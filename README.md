@@ -35,7 +35,7 @@ Simple Redis setup for DirectAdmin environments.
 
 If you find this plugin useful:
 
-☕ Buy me a coffee @ buymeacoffee.com/osmanboy
+☕ Buy me a coffee @ https://buymeacoffee.com/osmanboy
 
 ## Links
 
