@@ -1,10 +1,47 @@
-Hi all,
+# DA Redis add-in
 
-Because i was sick of editing wp-config.php manual everytime i made this simple Wordpress plug-in that does the following:
-Installs and activates the Redis Object Cache plugin automatically
-Configures Redis to use the correct DirectAdmin UNIX socket
-Detects the hosting user dynamically (no manual config needed)
-Provides a clear status dashboard (plugin, object cache, socket, connection, PHP extension)
-Includes one-click actions to fix issues and flush the cache
+Simple Redis setup for DirectAdmin environments.
 
-If people have more idea's or comments let me know!
+## Features
+
+- Automatically installs and activates Redis Object Cache
+- Detects DirectAdmin user and configures Redis socket
+- Supports custom home directories (/home, /home2, /partition2, etc.)
+- Uses wp-config.php as source of truth when available
+- Fallback to TCP (127.0.0.1:6379)
+- One-click fix and cache flush
+- Lightweight and clean UI
+
+## Requirements
+
+- WordPress
+- Redis server running
+- PHP Redis extension (phpredis)
+
+## Installation
+
+1. Upload the plugin to `/wp-content/plugins/`
+2. Activate the plugin
+3. Go to **Settings → DA Redis add-in**
+4. Click "Fix Redis" if needed
+
+## Notes
+
+- Designed for DirectAdmin environments
+- Does not modify server configuration
+- Uses existing Redis setup
+
+## Support
+
+If you find this plugin useful:
+
+☕ Buy me a coffee
+
+## Links
+
+- GitHub: https://github.com/osmanboy/Directadmin-redis-plugin/
+- DirectAdmin Forum: https://forum.directadmin.com/members/ericosman.57345/
+
+## License
+
+GPL v2 or later
