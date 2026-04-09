@@ -3,7 +3,7 @@
 Plugin Name: DA Redis add-in
 Description: Simple Redis setup for DirectAdmin, this plug-in installs Redis Object Cache incase it's needed, and configures all settings needed.
 Author: Ericosman
-Version: 0.3.1 BETA
+Version: 0.5
  */
 
 if (!defined('ABSPATH')) exit;
